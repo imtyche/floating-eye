@@ -73,13 +73,15 @@ class MonitorThread(QThread):
                                         use_screenshot=self.use_screenshot
                                     )
 
-                                    if screenshot_base64:
-                                        print(f"📷 已捕获媒体 (第 {self.total_switches} 次切换)")
+                                    # 检查捕获结果
+                                    if screenshot_base64 is not None and len(screenshot_base64) > 100:
+                                        print(f"✅ 媒体捕获成功，Base64长度: {len(screenshot_base64)} (第 {self.total_switches} 次切换)")
                                     else:
-                                        print(f"⚠️ 媒体捕获失败 (第 {self.total_switches} 次切换)")
+                                        print(f"⚠️ 媒体捕获失败，结果为空 (第 {self.total_switches} 次切换)")
 
                                     self.total_switches = 0
 
+                                # 发送信号（即使截图失败也发送，只是内容为 None）
                                 self.activity_changed.emit(title, screenshot_base64)
             except Exception as e:
                 print(f"监控线程错误: {e}")
