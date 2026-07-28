@@ -1,0 +1,1 @@
+pyinstaller --clean -D -w --name "EyeMonitor" --add-data "config;config" --add-data "core;core" --add-data "capture;capture" --add-data "ui;ui" --add-data "monitoring;monitoring" main.py
