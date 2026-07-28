@@ -275,9 +275,8 @@ class SettingsDialog(QDialog):
         about_layout.setContentsMargins(15, 20, 15, 15)
 
         about_text = QLabel(
-            "浮空之眼 v1.0\n"
-            "监控活动窗口，自动记录切换历史\n"
-            "📌 右键点击眼睛打开菜单"
+            '浮空之眼 v1.0 '
+            '关注 <a href="https://github.com/your-username/your-repo" style="color: #ff6b6b; text-decoration: none;">GitHub</a>'
         )
         about_text.setStyleSheet("color: #888888; font-size: 12px; line-height: 1.8; font-weight: normal;")
         about_layout.addWidget(about_text)
