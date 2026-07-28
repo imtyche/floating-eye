@@ -13,4 +13,32 @@
 - 🚀 支持开机自启动
 
 ## 安装
+package.bat
+
+## 目录结构
+```
+    floating-eye/
+    ├── README.md
+    ├── requirements.txt
+    ├── setup.py
+    ├── config/                     # 配置模块
+    │   ├── __init__.py
+    │   └── themes.py
+    ├── core/                       # 核心模块
+    │   ├── __init__.py
+    │   ├── database.py
+    │   └── settings.py
+    ├── capture/                    # 捕获模块
+    │   ├── __init__.py
+    │   └── screenshot.py
+    ├── ui/                         # UI模块
+    │   ├── __init__.py
+    │   ├── theme_style.py
+    │   ├── dialogs.py
+    │   └── eye_widget.py
+    ├── monitoring/                 # 监控模块
+    │   ├── __init__.py
+    │   └── monitor_thread.py
+    └── main.py                     # 主程序
+```
 
