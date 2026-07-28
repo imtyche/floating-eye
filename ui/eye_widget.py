@@ -374,7 +374,7 @@ class FloatingEye(QWidget):
         painter.save()
         painter.setClipPath(eye_path)
 
-        # 绘制眼白（巩膜）
+        # 绘制眼白（巩膜）- 根据眼睛颜色模式调整
         eye_radius_x = socket_w * 0.82
         eye_radius_y = current_h * 0.78
         if eye_radius_y < 3:
@@ -384,10 +384,21 @@ class FloatingEye(QWidget):
         eye_center_y = center_y + self.eye_y * 0.6
 
         sclera_grad = QRadialGradient(eye_center_x - 1, eye_center_y - 1, eye_radius_x)
-        sclera_grad.setColorAt(0.0, QColor(70, 55, 55, 240))
-        sclera_grad.setColorAt(0.5, QColor(55, 42, 42, 235))
-        sclera_grad.setColorAt(0.8, QColor(40, 30, 30, 230))
-        sclera_grad.setColorAt(1.0, QColor(25, 18, 18, 220))
+
+        # 根据眼睛颜色模式设置眼白颜色
+        if self.eye_color_mode == 'angel':
+            # 天使模式：白色眼白
+            sclera_grad.setColorAt(0.0, QColor(255, 255, 255, 240))
+            sclera_grad.setColorAt(0.5, QColor(245, 245, 255, 235))
+            sclera_grad.setColorAt(0.8, QColor(230, 235, 245, 230))
+            sclera_grad.setColorAt(1.0, QColor(210, 215, 230, 220))
+        else:
+            # 默认和恶魔模式：暗红色眼白
+            sclera_grad.setColorAt(0.0, QColor(70, 55, 55, 240))
+            sclera_grad.setColorAt(0.5, QColor(55, 42, 42, 235))
+            sclera_grad.setColorAt(0.8, QColor(40, 30, 30, 230))
+            sclera_grad.setColorAt(1.0, QColor(25, 18, 18, 220))
+
         painter.setBrush(sclera_grad)
         painter.drawEllipse(QRectF(eye_center_x - eye_radius_x, eye_center_y - eye_radius_y,
                                    eye_radius_x * 2, eye_radius_y * 2))
