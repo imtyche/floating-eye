@@ -1,11 +1,9 @@
 import os
-import sys
 import math
 import random
-import ctypes
 from PySide6.QtCore import Qt, QTimer, QPoint, QRectF
-from PySide6.QtGui import QPainter, QColor, QRadialGradient, QRegion, QPainterPath, QAction  # 修复：QAction 在 QtGui
-from PySide6.QtWidgets import QWidget, QApplication, QMenu  # 移除 QAction
+from PySide6.QtGui import QPainter, QColor, QRadialGradient, QRegion, QPainterPath, QAction
+from PySide6.QtWidgets import QWidget, QApplication, QMenu
 
 # 设置 Qt 环境
 os.environ["QT_QUICK_BACKEND"] = "software"
@@ -15,7 +13,6 @@ from config.themes import ThemeManager
 from core.database import DatabaseManager
 from core.settings import SettingsManager
 from monitoring.monitor_thread import MonitorThread
-from capture.screenshot import ScreenshotManager
 
 
 class FloatingEye(QWidget):
@@ -83,6 +80,12 @@ class FloatingEye(QWidget):
         self.iris_rotation = 0.0
         self.vein_phase = 0.0
         self.blink_phase = 0
+
+        # ===== 浮动效果相关 =====
+        self.float_phase = random.uniform(0, 2 * math.pi)  # 浮动相位
+        self.float_offset_y = 0.0  # 当前浮动偏移量
+        self.float_amplitude = 4.0  # 浮动幅度（像素）
+        self.float_speed = 0.025  # 浮动速度
 
         # 动画定时器 (约60FPS)
         self.timer = QTimer(self)
@@ -252,6 +255,11 @@ class FloatingEye(QWidget):
         self.eye_x += (self.target_x - self.eye_x) * 0.08
         self.eye_y += (self.target_y - self.eye_y) * 0.08
 
+        # ===== 更新浮动效果 =====
+        self.float_phase += self.float_speed
+        # 使用正弦波产生柔和上下浮动
+        self.float_offset_y = math.sin(self.float_phase) * self.float_amplitude
+
         # 更新其他动画参数
         self.iris_rotation += 0.0008
         self.glow_pulse += 0.03
@@ -296,7 +304,10 @@ class FloatingEye(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        center_x, center_y = 35, 28
+        # ===== 应用浮动偏移到中心位置 =====
+        center_x = 35
+        center_y = 28 + self.float_offset_y  # 上下浮动
+
         socket_w = 30
         socket_h = 22
 
