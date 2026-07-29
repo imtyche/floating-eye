@@ -5,6 +5,8 @@ from PySide6.QtCore import Qt, QTimer, QPoint, QRectF
 from PySide6.QtGui import QPainter, QColor, QRadialGradient, QLinearGradient, QRegion, QPainterPath, QAction
 from PySide6.QtWidgets import QWidget, QApplication, QMenu
 
+from plugins.manager import PluginManager
+
 # 设置 Qt 环境
 os.environ["QT_QUICK_BACKEND"] = "software"
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
@@ -24,6 +26,12 @@ class FloatingEye(QWidget):
         # 初始化核心组件
         self.db = DatabaseManager()
         self.settings_manager = SettingsManager()
+
+        # 1. 创建 PluginManager
+        self.plugin_manager = PluginManager(self.settings_manager, self)
+
+        # 2. 自动开启先前已勾选启用的插件
+        self.plugin_manager.load_all_plugins()
 
         # 加载设置
         self.load_settings()

@@ -305,6 +305,21 @@ class SettingsDialog(QDialog):
         retention_group.setLayout(retention_layout)
         scroll_layout.addWidget(retention_group)
 
+        # ==========================================
+        # 🧩 动态注入插件配置 UI
+        # ==========================================
+        if hasattr(self.parent, 'plugin_manager') and self.parent.plugin_manager:
+            plugin_group = QGroupBox("🧩 拓展插件设置")
+            plugin_layout = QVBoxLayout()
+            plugin_layout.setSpacing(10)
+            plugin_layout.setContentsMargins(10, 15, 10, 10)
+
+            # 将该 Layout 传给 PluginManager 进行自动挂载
+            self.parent.plugin_manager.inject_settings_ui(plugin_layout, plugin_group)
+
+            plugin_group.setLayout(plugin_layout)
+            scroll_layout.addWidget(plugin_group)
+
         # 5. 关于
         about_group = QGroupBox("ℹ️ 关于")
         about_layout = QVBoxLayout()
