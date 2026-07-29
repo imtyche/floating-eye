@@ -312,9 +312,12 @@ class SettingsDialog(QDialog):
         about_layout.setContentsMargins(15, 20, 15, 15)
 
         about_text = QLabel(
-            '浮空之眼 v1.0 '
-            '关注 <a href="https://github.com/imtyche/floating-eye" style="color: #ff6b6b; text-decoration: none;">GitHub</a>'
+            '当前版本 浮空之眼 v1.0 '
+            ' 最新版下载 <a href="https://github.com/imtyche/floating-eye/releases" style="color: #ff6b6b; text-decoration: none;">GitHub</a>'
         )
+        # 开启自动打开外部链接功能
+        about_text.setOpenExternalLinks(True)
+
         about_text.setStyleSheet("color: #888888; font-size: 12px; line-height: 1.8; font-weight: normal;")
         about_layout.addWidget(about_text)
 
