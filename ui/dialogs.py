@@ -268,6 +268,40 @@ class SettingsDialog(QDialog):
         startup_group.setLayout(startup_layout)
         scroll_layout.addWidget(startup_group)
 
+        # 数据保留设置
+        retention_group = QGroupBox("💾 数据保留")
+        retention_layout = QVBoxLayout()
+        retention_layout.setSpacing(12)
+        retention_layout.setContentsMargins(15, 20, 15, 15)
+
+        retention_widget = QWidget()
+        retention_widget_layout = QHBoxLayout(retention_widget)
+        retention_widget_layout.setContentsMargins(0, 0, 0, 0)
+        retention_widget_layout.setSpacing(12)
+
+        retention_label = QLabel("保留天数：")
+        retention_label.setStyleSheet("font-weight: bold;")
+        retention_widget_layout.addWidget(retention_label)
+
+        self.retention_combo = QComboBox()
+        self.retention_combo.addItem("永久保存", "0")
+        self.retention_combo.addItem("1 天", "1")
+        self.retention_combo.addItem("30 天", "30")
+        self.retention_combo.addItem("90 天", "90")
+        self.retention_combo.addItem("180 天", "180")
+        self.retention_combo.setToolTip("自动清理超过指定天数的截图与历史日志")
+        retention_widget_layout.addWidget(self.retention_combo)
+        retention_widget_layout.addStretch()
+
+        retention_layout.addWidget(retention_widget)
+
+        retention_hint = QLabel("💡 超出保留期限的历史日志及截图将在后台自动清理")
+        retention_hint.setProperty("class", "hint")
+        retention_layout.addWidget(retention_hint)
+
+        retention_group.setLayout(retention_layout)
+        scroll_layout.addWidget(retention_group)
+
         # 5. 关于
         about_group = QGroupBox("ℹ️ 关于")
         about_layout = QVBoxLayout()
@@ -341,6 +375,11 @@ class SettingsDialog(QDialog):
             self.use_camera_check.setEnabled(False)
             self.use_camera_check.setStyleSheet("color: #555555;")
             self.use_camera_check.setToolTip("相机模块不可用，请安装 QtMultimedia")
+        # 加载数据保留天数设置
+        retention_days = settings.get('retention_days', '0')
+        retention_index = self.retention_combo.findData(retention_days)
+        if retention_index >= 0:
+            self.retention_combo.setCurrentIndex(retention_index)
 
     def reset_defaults(self):
         """恢复默认设置"""
@@ -359,6 +398,7 @@ class SettingsDialog(QDialog):
             self.current_theme = 'blood'
             self.eye_color_default.setChecked(True)
             self.apply_theme()
+            self.retention_combo.setCurrentIndex(self.retention_combo.findData('0'))
 
     def save_and_apply(self):
         """保存并应用设置"""
@@ -388,6 +428,9 @@ class SettingsDialog(QDialog):
 
         QMessageBox.information(self, "✅ 设置已保存", "设置已成功保存并应用！")
         self.accept()
+        # 在保存所有设置时加上 retention_days：
+        retention_days = self.retention_combo.currentData()
+        self.settings_manager.set_setting('retention_days', str(retention_days))
 
     def get_theme(self):
         """获取当前主题"""

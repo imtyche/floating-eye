@@ -109,6 +109,8 @@ class FloatingEye(QWidget):
         self.auto_start = self.settings_manager.get_setting('auto_start', 'false') == 'true'
         self.current_theme = self.settings_manager.get_setting('theme', 'blood')
         self.eye_color_mode = self.settings_manager.get_setting('eye_color', 'default')
+        retention_days = self.settings_manager.get_setting('retention_days', '0')
+        self.db.clean_expired_logs(retention_days)
 
     def apply_settings(self):
         """应用设置（从设置对话框调用）"""

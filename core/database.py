@@ -108,3 +108,26 @@ class DatabaseManager:
                 'screenshot': row[3]
             }
         return None
+    # 清理过期数据
+    def clean_expired_logs(self, retention_days):
+        """根据数据保留天数自动删除过期数据"""
+        try:
+            days = int(retention_days)
+            if days <= 0:
+                return  # 0 或负数表示不清理 (永久保存)
+
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+
+            # 删除 timestamp 小于 N 天前的日志数据
+            cursor.execute(
+                "DELETE FROM logs WHERE datetime(timestamp) < datetime('now', '-' || ? || ' days', 'localtime')",
+                (days,)
+            )
+            cleaned_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+            if cleaned_count > 0:
+                print(f"🧹 已自动清理 {cleaned_count} 条超过 {days} 天的历史日志")
+        except Exception as e:
+            print(f"⚠️ 清理过期数据时出错: {e}")

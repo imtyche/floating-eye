@@ -27,7 +27,8 @@ class SettingsManager:
             'capture_interval': '3',
             'auto_start': 'false',
             'theme': 'blood',
-            'eye_color': 'default'
+            'eye_color': 'default',
+            'retention_days': '0'
         }
 
         for key, value in default_settings.items():
