@@ -285,8 +285,11 @@ class SettingsDialog(QDialog):
 
         self.retention_combo = QComboBox()
         self.retention_combo.addItem("永久保存", "0")
-        self.retention_combo.addItem("1 天", "1")
+        self.retention_combo.addItem("3 天", "3")
+        self.retention_combo.addItem("7 天", "7")
+        self.retention_combo.addItem("15 天", "15")
         self.retention_combo.addItem("30 天", "30")
+        self.retention_combo.addItem("60 天", "60")
         self.retention_combo.addItem("90 天", "90")
         self.retention_combo.addItem("180 天", "180")
         self.retention_combo.setToolTip("自动清理超过指定天数的截图与历史日志")
