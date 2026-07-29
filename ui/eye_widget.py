@@ -2,7 +2,7 @@ import os
 import math
 import random
 from PySide6.QtCore import Qt, QTimer, QPoint, QRectF
-from PySide6.QtGui import QPainter, QColor, QRadialGradient, QRegion, QPainterPath, QAction
+from PySide6.QtGui import QPainter, QColor, QRadialGradient, QLinearGradient, QRegion, QPainterPath, QAction
 from PySide6.QtWidgets import QWidget, QApplication, QMenu
 
 # 设置 Qt 环境
@@ -16,7 +16,7 @@ from monitoring.monitor_thread import MonitorThread
 
 
 class FloatingEye(QWidget):
-    """浮空眼睛主窗口 - 带有动态眼睛动画效果"""
+    """浮空眼睛主窗口 - 带有动态眼睛动画效果及双推进器"""
 
     def __init__(self):
         super().__init__()
@@ -42,8 +42,8 @@ class FloatingEye(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-        # 窗口尺寸
-        self.resize(70, 56)
+        # 稍微增大窗口高度以容纳下方的推进器火焰
+        self.resize(70, 70)
 
         # 拖拽相关
         self.drag_position = QPoint()
@@ -82,10 +82,13 @@ class FloatingEye(QWidget):
         self.blink_phase = 0
 
         # ===== 浮动效果相关 =====
-        self.float_phase = random.uniform(0, 2 * math.pi)  # 浮动相位
-        self.float_offset_y = 0.0  # 当前浮动偏移量
-        self.float_amplitude = 4.0  # 浮动幅度（像素）
-        self.float_speed = 0.025  # 浮动速度
+        self.float_phase = random.uniform(0, 2 * math.pi)
+        self.float_offset_y = 0.0
+        self.float_amplitude = 4.0
+        self.float_speed = 0.025
+
+        # ===== 推进器效果相关 =====
+        self.booster_flame_phase = 0.0
 
         # 动画定时器 (约60FPS)
         self.timer = QTimer(self)
@@ -113,7 +116,7 @@ class FloatingEye(QWidget):
         if self.monitor:
             self.monitor.update_settings()
         self.apply_auto_start()
-        self.update()  # 触发重绘以应用眼睛颜色
+        self.update()
 
     def apply_auto_start(self):
         """应用开机启动设置"""
@@ -124,7 +127,6 @@ class FloatingEye(QWidget):
 
             if self.auto_start:
                 import sys
-                import os
                 exe_path = sys.executable if getattr(sys, 'frozen', False) else __file__
 
                 if not getattr(sys, 'frozen', False):
@@ -136,7 +138,6 @@ class FloatingEye(QWidget):
                     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
                     winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, exe_path)
                     winreg.CloseKey(key)
-                    print(f"✅ 已添加到开机启动: {exe_path}")
                 except Exception as e:
                     print(f"⚠️ 添加开机启动失败: {e}")
             else:
@@ -144,7 +145,6 @@ class FloatingEye(QWidget):
                     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
                     winreg.DeleteValue(key, app_name)
                     winreg.CloseKey(key)
-                    print("✅ 已从开机启动中移除")
                 except FileNotFoundError:
                     pass
                 except Exception as e:
@@ -181,7 +181,6 @@ class FloatingEye(QWidget):
         if current_mouse_pos != self.last_mouse_pos:
             self.mouse_idle_counter = 0
             self.is_mouse_idle = False
-            # 鼠标动了，立即停止偷看，回归跟随鼠标
             self.is_glancing = False
             self.glance_timer = 0
             self.last_mouse_pos = current_mouse_pos
@@ -194,55 +193,40 @@ class FloatingEye(QWidget):
 
         # 计算眼球目标位置
         if self.is_mouse_idle:
-            # 待机偷看逻辑
             self.glance_timer += 1
-
             if not self.is_glancing:
                 if self.glance_timer >= self.next_glance_delay:
                     self.is_glancing = True
                     self.glance_timer = 0
                     self.glance_duration = random.randint(40, 120)
 
-                    # 随机选择方向
                     direction = random.choice(['up', 'down', 'left', 'right'])
-
                     if direction == 'up':
-                        self.glance_target_x = 0.0
-                        self.glance_target_y = -10.0
+                        self.glance_target_x, self.glance_target_y = 0.0, -10.0
                     elif direction == 'down':
-                        self.glance_target_x = 0.0
-                        self.glance_target_y = 8.0
+                        self.glance_target_x, self.glance_target_y = 0.0, 8.0
                     elif direction == 'left':
-                        self.glance_target_x = -11.0
-                        self.glance_target_y = 0.0
+                        self.glance_target_x, self.glance_target_y = -11.0, 0.0
                     elif direction == 'right':
-                        self.glance_target_x = 11.0
-                        self.glance_target_y = 0.0
+                        self.glance_target_x, self.glance_target_y = 11.0, 0.0
             else:
                 if self.glance_timer >= self.glance_duration:
                     self.is_glancing = False
                     self.glance_timer = 0
                     self.next_glance_delay = random.randint(150, 400)
 
-            if self.is_glancing:
-                base_target_x = self.glance_target_x
-                base_target_y = self.glance_target_y
-            else:
-                base_target_x = 0.0
-                base_target_y = 0.0
+            base_target_x = self.glance_target_x if self.is_glancing else 0.0
+            base_target_y = self.glance_target_y if self.is_glancing else 0.0
         else:
-            # 跟随鼠标逻辑
             base_target_x = (local_cursor.x() - center_x) / 5.0
             base_target_y = (local_cursor.y() - center_y) / 6.0
 
-            # 限制最大移动范围
             distance = math.sqrt((base_target_x / max_radius_x)**2 + (base_target_y / max_radius_y)**2)
             if distance > 1:
                 scale = 1 / distance
                 base_target_x *= scale
                 base_target_y *= scale
 
-        # 添加轻微的生理性颤动
         tremor_scale = 0.05 if self.is_glancing else 0.12
         self.tremor_phase += 0.06
         tremor_x = math.sin(self.tremor_phase) * tremor_scale
@@ -251,14 +235,13 @@ class FloatingEye(QWidget):
         self.target_x = base_target_x + tremor_x
         self.target_y = base_target_y + tremor_y
 
-        # 平滑插值移动眼球
         self.eye_x += (self.target_x - self.eye_x) * 0.08
         self.eye_y += (self.target_y - self.eye_y) * 0.08
 
-        # ===== 更新浮动效果 =====
+        # ===== 浮动与推进器相位动画 =====
         self.float_phase += self.float_speed
-        # 使用正弦波产生柔和上下浮动
         self.float_offset_y = math.sin(self.float_phase) * self.float_amplitude
+        self.booster_flame_phase += 0.35  # 火焰波动速度
 
         # 更新其他动画参数
         self.iris_rotation += 0.0008
@@ -298,15 +281,89 @@ class FloatingEye(QWidget):
 
         self.update()
 
+    def draw_boosters(self, painter, center_x, center_y):
+        """绘制眼睛下方外八字斜向喷射的两个推进器及动态火焰"""
+        # 左右喷喷嘴的位置与倾斜角度（角度：左喷嘴顺时针偏转，右喷嘴逆时针偏转）
+        booster_configs = [
+            {'x': center_x - 20, 'y': center_y + 16, 'angle': 25.0},  # 左推进器：向左外八字倾斜
+            {'x': center_x + 20, 'y': center_y + 16, 'angle': -25.0}   # 右推进器：向右外八字倾斜
+        ]
+
+        nozzle_w = 7
+        nozzle_h = 8
+
+        # 确定火焰颜色梯度 (跟随 eye_color_mode 主题)
+        if self.eye_color_mode == 'angel':
+            core_color = QColor(200, 240, 255, 230)
+            mid_color = QColor(0, 150, 255, 180)
+            outer_color = QColor(0, 50, 200, 0)
+        elif self.eye_color_mode == 'demon':
+            core_color = QColor(240, 200, 255, 230)
+            mid_color = QColor(160, 0, 220, 180)
+            outer_color = QColor(60, 0, 120, 0)
+        else:  # default (Blood)
+            core_color = QColor(255, 220, 150, 230)
+            mid_color = QColor(255, 60, 0, 180)
+            outer_color = QColor(180, 0, 0, 0)
+
+        for idx, config in enumerate(booster_configs):
+            painter.save()
+
+            # 将坐标系平移至喷嘴中心并旋转，实现八字散开的效果
+            painter.translate(config['x'], config['y'])
+            painter.rotate(config['angle'])
+
+            # ===== 1. 绘制喷气火焰 =====
+            noise = random.uniform(-1.5, 1.5)
+            flame_len = 14 + math.sin(self.booster_flame_phase + idx) * 3.5 + noise
+            flame_w = nozzle_w * (0.85 + math.sin(self.booster_flame_phase * 1.5) * 0.1)
+
+            flame_path = QPainterPath()
+            flame_top = nozzle_h / 2
+            flame_path.moveTo(-flame_w / 2, flame_top)
+            flame_path.quadTo(0, flame_top + flame_len * 1.2, flame_w / 2, flame_top)
+            flame_path.closeSubpath()
+
+            flame_grad = QLinearGradient(0, flame_top, 0, flame_top + flame_len)
+            flame_grad.setColorAt(0.0, core_color)
+            flame_grad.setColorAt(0.4, mid_color)
+            flame_grad.setColorAt(1.0, outer_color)
+
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(flame_grad)
+            painter.drawPath(flame_path)
+
+            # ===== 2. 绘制金属喷嘴外壳 =====
+            nozzle_path = QPainterPath()
+            nozzle_path.moveTo(-nozzle_w / 2 + 1, -nozzle_h / 2)
+            nozzle_path.lineTo(nozzle_w / 2 - 1, -nozzle_h / 2)
+            nozzle_path.lineTo(nozzle_w / 2, nozzle_h / 2)
+            nozzle_path.lineTo(-nozzle_w / 2, nozzle_h / 2)
+            nozzle_path.closeSubpath()
+
+            nozzle_grad = QLinearGradient(-nozzle_w / 2, 0, nozzle_w / 2, 0)
+            nozzle_grad.setColorAt(0.0, QColor(40, 40, 45))
+            nozzle_grad.setColorAt(0.5, QColor(110, 110, 120))
+            nozzle_grad.setColorAt(1.0, QColor(30, 30, 35))
+
+            painter.setBrush(nozzle_grad)
+            painter.setPen(QColor(20, 20, 25))
+            painter.drawPath(nozzle_path)
+
+            painter.restore()
+
     def paintEvent(self, event):
-        """绘制眼睛"""
+        """绘制眼睛与推进器"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
         # ===== 应用浮动偏移到中心位置 =====
         center_x = 35
-        center_y = 28 + self.float_offset_y  # 上下浮动
+        center_y = 28 + self.float_offset_y
+
+        # 1. 优先绘制下方的双推进器（置于眼睛图层下方）
+        self.draw_boosters(painter, center_x, center_y)
 
         socket_w = 30
         socket_h = 22
@@ -318,12 +375,10 @@ class FloatingEye(QWidget):
         if current_h < 1.0:
             current_h = 1.0
 
-        # 绘制眼窝形状
+        # 2. 绘制眼窝形状
         eye_path = self.create_eye_shape(center_x, center_y, socket_w, current_h)
-        region = QRegion(eye_path.toFillPolygon().toPolygon())
-        self.setMask(region)
 
-        # 绘制眼窝背景（深红色渐变）
+        # 绘制眼窝背景
         socket_grad = QRadialGradient(center_x, center_y + 2, socket_w)
         socket_grad.setColorAt(0.0, QColor(15, 5, 8, 255))
         socket_grad.setColorAt(0.3, QColor(10, 3, 5, 255))
@@ -340,7 +395,6 @@ class FloatingEye(QWidget):
         glow_path = self.create_eye_shape(center_x, center_y, glow_w, glow_h)
         glow_grad = QRadialGradient(center_x, center_y, glow_w)
 
-        # 根据设置改变发光颜色
         glow_colors = {
             'default': [
                 (0.0, QColor(255, 0, 0, 0)),
@@ -374,7 +428,7 @@ class FloatingEye(QWidget):
         painter.save()
         painter.setClipPath(eye_path)
 
-        # 绘制眼白（巩膜）- 根据眼睛颜色模式调整
+        # 绘制眼白（巩膜）
         eye_radius_x = socket_w * 0.82
         eye_radius_y = current_h * 0.78
         if eye_radius_y < 3:
@@ -385,15 +439,12 @@ class FloatingEye(QWidget):
 
         sclera_grad = QRadialGradient(eye_center_x - 1, eye_center_y - 1, eye_radius_x)
 
-        # 根据眼睛颜色模式设置眼白颜色
         if self.eye_color_mode == 'angel':
-            # 天使模式：白色眼白
             sclera_grad.setColorAt(0.0, QColor(255, 255, 255, 240))
             sclera_grad.setColorAt(0.5, QColor(245, 245, 255, 235))
             sclera_grad.setColorAt(0.8, QColor(230, 235, 245, 230))
             sclera_grad.setColorAt(1.0, QColor(210, 215, 230, 220))
         else:
-            # 默认和恶魔模式：暗红色眼白
             sclera_grad.setColorAt(0.0, QColor(70, 55, 55, 240))
             sclera_grad.setColorAt(0.5, QColor(55, 42, 42, 235))
             sclera_grad.setColorAt(0.8, QColor(40, 30, 30, 230))
@@ -414,7 +465,6 @@ class FloatingEye(QWidget):
 
         iris_grad = QRadialGradient(iris_x - 1, iris_y - 1, iris_radius_x)
 
-        # 根据设置改变虹膜颜色
         if self.eye_color_mode == 'angel':
             iris_grad.setColorAt(0.0, QColor(100, 200, 255))
             iris_grad.setColorAt(0.2, QColor(0, 150, 220))
@@ -429,7 +479,7 @@ class FloatingEye(QWidget):
             iris_grad.setColorAt(0.6, QColor(80, 0, 100))
             iris_grad.setColorAt(0.8, QColor(40, 0, 60))
             iris_grad.setColorAt(1.0, QColor(20, 0, 30))
-        else:  # default
+        else:
             iris_grad.setColorAt(0.0, QColor(180, 0, 0))
             iris_grad.setColorAt(0.2, QColor(140, 0, 0))
             iris_grad.setColorAt(0.4, QColor(100, 0, 0))
@@ -450,7 +500,6 @@ class FloatingEye(QWidget):
 
         pupil_grad = QRadialGradient(iris_x, iris_y, pupil_h)
 
-        # 瞳孔颜色微调
         if self.eye_color_mode == 'angel':
             pupil_grad.setColorAt(0.0, QColor(0, 0, 0, 255))
             pupil_grad.setColorAt(0.7, QColor(0, 20, 40, 250))
@@ -558,7 +607,6 @@ class FloatingEye(QWidget):
             from ui.dialogs import SettingsDialog
             dialog = SettingsDialog(self.settings_manager, self)
             dialog.exec()
-            # 更新主题
             self.current_theme = self.settings_manager.get_setting('theme', 'blood')
         except Exception as e:
             print(f"打开设置对话框错误: {e}")
