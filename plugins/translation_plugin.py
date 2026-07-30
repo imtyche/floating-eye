@@ -124,9 +124,11 @@ class TranslationBubble(QWidget):
 
 
 class TranslationPlugin(BasePlugin):
-    """双击词汇翻译插件"""
+    """双击词汇延迟翻译插件（带打断功能）"""
 
+    start_delay_signal = Signal()
     trigger_translation_signal = Signal()
+    cancel_translation_signal = Signal()
 
     def __init__(self, settings_manager, parent=None):
         super().__init__(settings_manager, parent)
@@ -134,12 +136,26 @@ class TranslationPlugin(BasePlugin):
         self.worker = None
 
         self.mouse_listener = None
+        self.kbd_listener = None
+
         self.last_click_time = 0
         self.last_click_pos = (0, 0)
         self.double_click_interval = 0.4
         self.double_click_dist = 6
 
+        # 标记是否正在执行系统级别的自动模拟按键(Ctrl+C)，避免误打断
+        self._is_simulating_keypress = False
+
+        # 3秒倒计时定时器
+        self.delay_timer = QTimer(self)
+        self.delay_timer.setSingleShot(True)
+        self.delay_timer.setInterval(3000)  # 3000ms = 3秒
+        self.delay_timer.timeout.connect(self._on_trigger_translation)
+
+        # Qt 线程间信号绑定
+        self.start_delay_signal.connect(self._on_start_delay)
         self.trigger_translation_signal.connect(self._on_trigger_translation)
+        self.cancel_translation_signal.connect(self._on_cancel_translation)
 
     @property
     def plugin_id(self) -> str:
@@ -156,10 +172,12 @@ class TranslationPlugin(BasePlugin):
         if not self.bubble:
             self.bubble = TranslationBubble()
 
-        self.mouse_listener = mouse.Listener(
-            on_click=self._on_mouse_click
-        )
+        # 启动鼠标与键盘监听器
+        self.mouse_listener = mouse.Listener(on_click=self._on_mouse_click)
         self.mouse_listener.start()
+
+        self.kbd_listener = keyboard.Listener(on_press=self._on_key_press)
+        self.kbd_listener.start()
 
     def disable(self):
         if not self.is_enabled:
@@ -170,40 +188,84 @@ class TranslationPlugin(BasePlugin):
             self.mouse_listener.stop()
             self.mouse_listener = None
 
-        self._cleanup_worker()
+        if self.kbd_listener:
+            self.kbd_listener.stop()
+            self.kbd_listener = None
 
-        if self.bubble:
-            self.bubble.hide()
+        self._on_cancel_translation()
 
     def _cleanup_worker(self):
-        """Safely stop and clean up worker thread"""
+        """安全停止并清理线程 worker"""
         if self.worker is not None:
             try:
                 if self.worker.isRunning():
-                    self.worker.quit()
-                    self.worker.wait(1000)
+                    self.worker.terminate()
+                    self.worker.wait(500)
             except RuntimeError:
                 pass
             self.worker = None
 
+    def _is_busy(self) -> bool:
+        """检查当前是否处于倒计时等待中或正在翻译请求中"""
+        timer_active = self.delay_timer.isActive()
+        worker_active = self.worker is not None and self.worker.isRunning()
+        return timer_active or worker_active
+
     def _on_mouse_click(self, x, y, button, pressed):
+        if not self.is_enabled or not pressed:
+            return
+
+        current_time = time.time()
+        dx = abs(x - self.last_click_pos[0])
+        dy = abs(y - self.last_click_pos[1])
+
+        # 判断是否构成双击
+        if button == mouse.Button.left and (current_time - self.last_click_time) <= self.double_click_interval and dx <= self.double_click_dist and dy <= self.double_click_dist:
+            self.last_click_time = 0
+            # 触发 3 秒倒计时
+            self.start_delay_signal.emit()
+        else:
+            self.last_click_time = current_time
+            self.last_click_pos = (x, y)
+            # 如果当前处于“3秒等待”或“翻译中”状态，任意鼠标点击都打断
+            if self._is_busy():
+                self.cancel_translation_signal.emit()
+
+    def _on_key_press(self, key):
         if not self.is_enabled:
             return
 
-        if button == mouse.Button.left and pressed:
-            current_time = time.time()
-            dx = abs(x - self.last_click_pos[0])
-            dy = abs(y - self.last_click_pos[1])
+        # 过滤模拟按键发出的触发
+        if self._is_simulating_keypress:
+            return
 
-            if (current_time - self.last_click_time) <= self.double_click_interval and dx <= self.double_click_dist and dy <= self.double_click_dist:
-                self.last_click_time = 0
-                self.trigger_translation_signal.emit()
-            else:
-                self.last_click_time = current_time
-                self.last_click_pos = (x, y)
+        # 如果处于“3秒等待”或“翻译中”状态，按下任意键盘按键打断翻译
+        if self._is_busy():
+            self.cancel_translation_signal.emit()
+
+    def _on_start_delay(self):
+        """开始 3 秒翻译倒计时"""
+        self._on_cancel_translation()  # 取消之前的任务
+        self.delay_timer.start()
+
+    def _on_cancel_translation(self):
+        """打断并取消当前等待和翻译任务"""
+        # 停止倒计时
+        if self.delay_timer.isActive():
+            self.delay_timer.stop()
+
+        # 终止正在发起的网络请求
+        self._cleanup_worker()
+
+        # 如果当前气泡正在显示“正在翻译中...”，隐藏气泡
+        if self.bubble and self.bubble.isVisible():
+            if "正在翻译" in self.bubble.label.text():
+                self.bubble.hide()
 
     def _on_trigger_translation(self):
+        """倒计时 3 秒结束后真正触发复制与翻译"""
         try:
+            self._is_simulating_keypress = True
             kbd_controller = keyboard.Controller()
             kbd_controller.press(keyboard.Key.ctrl)
             kbd_controller.press('c')
@@ -211,6 +273,8 @@ class TranslationPlugin(BasePlugin):
             kbd_controller.release(keyboard.Key.ctrl)
         except Exception as e:
             print(f"Simulation error: {e}")
+        finally:
+            self._is_simulating_keypress = False
 
         QTimer.singleShot(150, self._process_clipboard_text)
 
@@ -244,7 +308,7 @@ class TranslationPlugin(BasePlugin):
         layout.setSpacing(8)
         layout.setContentsMargins(15, 20, 15, 15)
 
-        chk_enable = QCheckBox("启用双击划词翻译（双击选中单词后直接翻译）", group)
+        chk_enable = QCheckBox("启用双击划词翻译（双击选中3秒后翻译，按键/点击打断）", group)
         is_enabled = self.settings_manager.get_setting("plugin_ai_translation_enabled", "false") == "true"
         chk_enable.setChecked(is_enabled)
 
@@ -258,7 +322,7 @@ class TranslationPlugin(BasePlugin):
         chk_enable.toggled.connect(on_toggle)
         layout.addWidget(chk_enable)
 
-        hint = QLabel("💡 使用提示：用鼠标双击选中任何文本/单词，系统会自动复制并弹出翻译结果（点击弹窗即可关闭）。")
+        hint = QLabel("💡 使用提示：用鼠标双击选中文本后等待 3 秒会自动翻译；在等待或翻译期间点击鼠标或敲击键盘即可取消翻译。")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #888888; font-size: 11px; line-height: 1.4;")
         layout.addWidget(hint)
