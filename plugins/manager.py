@@ -1,8 +1,7 @@
-import os
-import pkgutil
-import importlib
 import inspect
 from plugins.base import BasePlugin
+# 显式导入插件模块，确保打包后能稳定加载
+import plugins.translation_plugin as translation_plugin
 
 
 class PluginManager:
@@ -13,7 +12,7 @@ class PluginManager:
         self.parent = parent
         self.plugins = {}
 
-        # 🌟 自动扫描并注册 plugins 目录下的所有插件
+        # 🌟 自动扫描并注册插件
         self.discover_and_register_plugins()
 
     def register(self, plugin):
@@ -21,30 +20,25 @@ class PluginManager:
         self.plugins[plugin.plugin_id] = plugin
 
     def discover_and_register_plugins(self):
-        """🔍 动态扫描 plugins 目录"""
-        try:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
+        """🔍 注册插件模块"""
+        # 如果后续增加了新插件，只需在这里将模块名加进列表即可
+        plugin_modules = [
+            translation_plugin,
+        ]
 
-            for _, module_name, is_pkg in pkgutil.iter_modules([current_dir]):
-                if module_name == 'base' or module_name == 'manage' or is_pkg:
-                    continue
-
-                try:
-                    module = importlib.import_module(f"plugins.{module_name}")
-
-                    for name, obj in inspect.getmembers(module, inspect.isclass):
-                        if issubclass(obj, BasePlugin) and obj is not BasePlugin:
-                            if obj.__module__ == module.__name__:
-                                plugin_instance = obj(self.settings_manager, self.parent)
-                                self.register(plugin_instance)
-                                print(f"✅ 成功自动加载插件: {plugin_instance.name} (ID: {plugin_instance.plugin_id})")
-                except Exception as e:
-                    print(f"⚠️ 加载插件模块 '{module_name}' 失败: {e}")
-        except Exception as e:
-            print(f"⚠️ 自动扫描插件失败: {e}")
+        for module in plugin_modules:
+            try:
+                for name, obj in inspect.getmembers(module, inspect.isclass):
+                    if issubclass(obj, BasePlugin) and obj is not BasePlugin:
+                        if obj.__module__ == module.__name__:
+                            plugin_instance = obj(self.settings_manager, self.parent)
+                            self.register(plugin_instance)
+                            print(f"✅ 成功加载插件: {plugin_instance.name} (ID: {plugin_instance.plugin_id})")
+            except Exception as e:
+                print(f"⚠️ 加载插件模块 '{module}' 失败: {e}")
 
     def load_all_plugins(self):
-        """根据持久化配置初始化已启用的插件"""
+        """🌟 根据持久化配置初始化已启用的插件（之前丢失的方法）"""
         for plugin_id, plugin in self.plugins.items():
             enabled = self.settings_manager.get_setting(f"plugin_{plugin_id}_enabled", "false") == "true"
             if enabled:

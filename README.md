@@ -32,8 +32,9 @@ floating-eye/
 │   ├── __init__.py
 │   └── monitor_thread.py      # 监控主循环 / 线程（检测窗口切换并触发捕获）
 ├── plugins/
+│   ├── __init__.py
 │   ├── base.py                # 插件基类
-│   ├── manage.py              # 插件管理类
+│   ├── manager.py              # 插件管理类
 │   └── translation_plugin.py  # 翻译插件功能
 └── main.py                    # 程序入口（创建 QApplication 并显示 FloatingEye）
 ```
