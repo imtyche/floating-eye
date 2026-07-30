@@ -1,7 +1,7 @@
 import inspect
 from plugins.base import BasePlugin
 # 显式导入插件模块，确保打包后能稳定加载
-import plugins.translation_plugin as translation_plugin
+import plugins.todo_plugin as todo_plugin
 
 
 class PluginManager:
@@ -23,7 +23,8 @@ class PluginManager:
         """🔍 注册插件模块"""
         # 如果后续增加了新插件，只需在这里将模块名加进列表即可
         plugin_modules = [
-            translation_plugin,
+            #translation_plugin,
+            todo_plugin,
         ]
 
         for module in plugin_modules:

@@ -560,6 +560,15 @@ class FloatingEye(QWidget):
         except Exception as e:
             print(f"鼠标移动错误: {e}")
 
+    def mouseDoubleClickEvent(self, event):
+        """鼠标双击眼睛事件"""
+        if event.button() == Qt.LeftButton:
+            # 查找并触发待办事项插件
+            todo_plugin = self.plugin_manager.plugins.get("todo_list")
+            if todo_plugin and todo_plugin.is_enabled:
+                todo_plugin.show_todo_dialog()
+        super().mouseDoubleClickEvent(event)
+
     def show_context_menu(self, pos):
         """显示右键菜单"""
         try:
