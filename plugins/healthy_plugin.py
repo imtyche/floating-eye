@@ -118,9 +118,12 @@ class HealthyPlugin(BasePlugin):
         except ValueError:
             interval_min = 30
 
-        # 将分钟转为毫秒并启动定时器
         interval_ms = max(1, interval_min) * 60 * 1000
-        self.timer.start(interval_ms)
+
+        # 【修改点 1】先停止原有定时器，确保干净重新开始
+        self.timer.stop()
+        self.timer.setInterval(interval_ms)
+        self.timer.start()
 
     def show_reminder(self):
         """显示聊天气泡提醒"""
@@ -129,7 +132,11 @@ class HealthyPlugin(BasePlugin):
 
         # 如果已有气泡显示，先关闭上一个
         if self.current_bubble:
-            self.current_bubble.close()
+            try:
+                self.current_bubble.close()
+            except RuntimeError:
+                # 捕获 C++ 对象已被删除的情况
+                pass
 
         self.current_bubble = HealthyBubbleDialog(
             message="🍵 提示：您已经工作很长时间了，站起来活动一下，喝杯水吧！",
@@ -139,12 +146,14 @@ class HealthyPlugin(BasePlugin):
         # 设置气泡在主窗口附近或屏幕右下角弹出
         if self.parent() and hasattr(self.parent(), "geometry"):
             parent_geom = self.parent().geometry()
-            # 显示在父控件上方偏右位置
             x = parent_geom.x() + parent_geom.width() - 200
             y = max(20, parent_geom.y() - self.current_bubble.sizeHint().height() - 10)
             self.current_bubble.move(x, y)
 
         self.current_bubble.show()
+
+        # 【修改点 2】注意：不要在 show_reminder 里调用 _start_timer()！
+        # 默认的 QTimer 会自动循环，无需手动重启。
 
     def create_settings_widget(self, parent=None) -> QWidget:
         """创建插件在设置界面中的配置 UI"""
