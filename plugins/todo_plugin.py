@@ -75,6 +75,26 @@ class TodoDialog(QDialog):
                 color: #ffffff;
                 border: none;
             }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 4px;
+                margin: 0px 0px 0px 0px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #444454;
+                min-height: 20px;
+                border-radius: 2px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #ff4d4d;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+                background: none;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
         """)
 
         self.init_ui()

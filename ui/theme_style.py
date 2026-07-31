@@ -5,9 +5,60 @@ class ThemeStyleGenerator:
     """主题样式生成器 - 为UI组件生成动态样式"""
 
     @staticmethod
+    def get_scrollbar_style(colors):
+        """生成极细滚动条样式 (垂直 + 水平)"""
+        return f"""
+        /* 极细滚动条 - 垂直 */
+        QScrollBar:vertical {{
+            background: transparent;
+            width: 4px;
+            margin: 0px;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {colors['scrollbar']};
+            min-height: 20px;
+            border-radius: 2px;
+        }}
+        QScrollBar::handle:vertical:hover {{
+            background: {colors['scrollbar_hover']};
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            height: 0px;
+            background: none;
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+            background: none;
+        }}
+
+        /* 极细滚动条 - 水平 */
+        QScrollBar:horizontal {{
+            background: transparent;
+            height: 4px;
+            margin: 0px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {colors['scrollbar']};
+            min-width: 20px;
+            border-radius: 2px;
+        }}
+        QScrollBar::handle:horizontal:hover {{
+            background: {colors['scrollbar_hover']};
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            width: 0px;
+            background: none;
+        }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+            background: none;
+        }}
+        """
+
+    @staticmethod
     def get_dialog_style(theme_key):
-        """生成对话框样式"""
+        """生成对话框样式（应用于设置窗口等）"""
         colors = ThemeManager.get_colors(theme_key)
+        scrollbar_style = ThemeStyleGenerator.get_scrollbar_style(colors)
+
         return f"""
         QDialog {{
             background-color: {colors['bg_primary']};
@@ -137,23 +188,9 @@ class ThemeStyleGenerator:
             border: none;
             background: transparent;
         }}
-        QScrollBar:vertical {{
-            background: {colors['bg_secondary']};
-            width: 8px;
-            border-radius: 4px;
-        }}
-        QScrollBar::handle:vertical {{
-            background: {colors['scrollbar']};
-            border-radius: 4px;
-            min-height: 30px;
-        }}
-        QScrollBar::handle:vertical:hover {{
-            background: {colors['scrollbar_hover']};
-        }}
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-            border: none;
-            background: none;
-        }}
+        
+        {scrollbar_style}
+
         QComboBox {{
             background-color: {colors['bg_input']};
             color: {colors['text_primary']};
@@ -235,6 +272,8 @@ class ThemeStyleGenerator:
         """生成历史记录对话框样式"""
         colors = ThemeManager.get_colors(theme_key)
         list_style = ThemeStyleGenerator.get_list_widget_style(theme_key)
+        scrollbar_style = ThemeStyleGenerator.get_scrollbar_style(colors)
+
         return f"""
         QDialog {{
             background-color: {colors['bg_primary']};
@@ -326,6 +365,7 @@ class ThemeStyleGenerator:
             color: {colors['text_primary']};
         }}
         {list_style}
+        {scrollbar_style}
         QPushButton {{
             background-color: {colors['bg_secondary']};
             color: {colors['text_primary']};

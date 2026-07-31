@@ -35,6 +35,7 @@ floating-eye/
 │   ├── __init__.py
 │   ├── base.py                # 插件基类
 │   ├── manager.py             # 插件管理类
+│   ├── healthy_plugin.py      # 健康提醒功能
 │   └── todo_plugin.py         # 待办插件功能
 └── main.py                    # 程序入口（创建 QApplication 并显示 FloatingEye）
 ```
