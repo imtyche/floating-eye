@@ -9,7 +9,7 @@
 ## 目录结构
 ```
 floating-eye/
-├── README.md                  # 项目说明（这里可以替换为更详细的说明）
+├── README.md                  # 项目说明
 ├── requirements.txt           # 运行时依赖（用于 pip install -r requirements.txt）
 ├── setup.py                   # 打包 / 安装脚本（可通过 python setup.py install 或 pip install .）
 ├── package.bat                # Windows 打包/发布辅助脚本
