@@ -335,7 +335,7 @@ class LauncherPlugin(BasePlugin):
                 continue
             for root, _, files in os.walk(base_path):
                 for file in files:
-                    if file.endswith(".lnk"):
+                    if file.endswith((".lnk", ".url")):
                         name = os.path.splitext(file)[0]
                         if "uninstall" in name.lower() or name in found_names:
                             continue
