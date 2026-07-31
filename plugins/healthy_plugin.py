@@ -68,11 +68,11 @@ class HealthyBubbleDialog(QWidget):
         self.adjustSize()
         self.setFixedWidth(min(260, self.sizeHint().width()))
 
-        # 定时器：显示 5 秒后自动关闭气泡
+        # 定时器：显示 10 秒后自动关闭气泡（从 5 秒延长到 10 秒）
         self.close_timer = QTimer(self)
         self.close_timer.setSingleShot(True)
         self.close_timer.timeout.connect(self.close)
-        self.close_timer.start(5000)
+        self.close_timer.start(10000)
 
     def mousePressEvent(self, event):
         """点击气泡任意位置立即关闭"""
