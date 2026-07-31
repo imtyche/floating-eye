@@ -1,10 +1,12 @@
 import os
+import math
+import random
 import threading
 import urllib.parse
 import webbrowser
 import sys
-from PySide6.QtCore import Qt, QSize, QObject, Signal, QFileInfo, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, QSize, QObject, Signal, QFileInfo, QTimer, QPointF
+from PySide6.QtGui import QIcon, QPainter, QColor, QBrush, QPen
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLineEdit, QListWidget,
     QListWidgetItem, QWidget, QGroupBox, QCheckBox,
@@ -74,6 +76,85 @@ if sys.platform == 'win32':
             return int(widget.winId())
         except:
             return None
+
+
+class Particle:
+    """单个粒子的物理属性定义"""
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+        # 限制只向右下方扩散 (角度 0 到 90 度，即 0 到 pi/2)
+        angle = random.uniform(0.1, math.pi / 2 - 0.1)
+        speed = random.uniform(1.2, 3.2)  # 调低速度，更轻柔
+
+        self.vx = speed * math.cos(angle)  # 向右的平移速度
+        self.vy = speed * math.sin(angle)  # 向下的平移速度
+
+        # 精致微小粒子 (直径 1.5 到 3.5 像素)
+        self.size = random.uniform(1.5, 3.5)
+        self.alpha = 255.0
+        self.fade_rate = random.uniform(12.0, 20.0)  # 透明度衰减速度
+
+        # 柔和细腻的配色
+        colors = [
+            QColor(76, 175, 80),    # 薄荷绿
+            QColor(255, 255, 255),  # 柔白
+            QColor(180, 225, 182),  # 浅绿
+            QColor(255, 224, 130)   # 暖金
+        ]
+        self.color = random.choice(colors)
+
+    def update(self):
+        """更新粒子位置与透明度"""
+        self.x += self.vx
+        self.y += self.vy
+        self.alpha -= self.fade_rate
+        return self.alpha > 0
+
+
+class ParticleOverlay(QWidget):
+    """覆盖在窗口顶层的粒子特效画布，穿透鼠标事件"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # 允许鼠标穿透粒子画板
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+        self.particles = []
+
+        # 定时器刷新动画 (60 FPS)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_particles)
+        self.timer.start(16)
+
+    def add_burst(self, pos: QPointF, count=8):
+        """在指定点触发向右下方的微型粒子炸裂（默认 8 个粒子的轻量组合）"""
+        for _ in range(count):
+            self.particles.append(Particle(pos.x(), pos.y()))
+
+    def update_particles(self):
+        """逻辑更新与重绘"""
+        if not self.particles:
+            return
+
+        # 保留未死亡的粒子
+        self.particles = [p for p in self.particles if p.update()]
+        self.update()  # 触发 paintEvent
+
+    def paintEvent(self, event):
+        """渲染所有活动粒子"""
+        if not self.particles:
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        for p in self.particles:
+            c = QColor(p.color)
+            c.setAlpha(max(0, int(p.alpha)))
+            painter.setBrush(QBrush(c))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QPointF(p.x, p.y), p.size / 2, p.size / 2)
 
 
 class HotkeySignalHelper(QObject):
@@ -148,6 +229,15 @@ class LauncherDialog(QDialog):
         """)
 
         self.init_ui()
+
+        # 创建粒子的绘制覆盖层，覆盖整个窗口顶层
+        self.particle_overlay = ParticleOverlay(self)
+        self.particle_overlay.setGeometry(self.rect())
+        self.particle_overlay.raise_()
+
+        # 绑定文本输入改变事件，触发粒子特效
+        self.search_input.textChanged.connect(self.on_text_changed)
+
         # 初始刷新：无输入时不显示列表
         self.filter_apps("")
 
@@ -176,6 +266,21 @@ class LauncherDialog(QDialog):
         self.layout.addWidget(self.list_widget)
 
         self.list_widget.hide()
+
+    def resizeEvent(self, event):
+        """窗口调整大小时，确保粒子层同步覆盖全窗口"""
+        super().resizeEvent(event)
+        if hasattr(self, 'particle_overlay'):
+            self.particle_overlay.setGeometry(self.rect())
+
+    def on_text_changed(self, text):
+        """文本改变时在光标当前位置触发粒子轻柔扩散"""
+        # 获取光标在输入框内的坐标位置，并转换为对话框相对坐标
+        cursor_pos_in_input = self.search_input.cursorRect().center()
+        burst_pos = self.search_input.mapTo(self, cursor_pos_in_input)
+
+        # 触发 8 个向右下方散落的微型粒子
+        self.particle_overlay.add_burst(QPointF(burst_pos.x(), burst_pos.y()), count=8)
 
     def eventFilter(self, obj, event):
         """事件过滤器：监控输入框的焦点事件"""
