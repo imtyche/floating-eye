@@ -2,7 +2,8 @@ import os
 import threading
 import urllib.parse
 import webbrowser
-from PySide6.QtCore import Qt, QSize, QObject, Signal, QFileInfo
+import sys
+from PySide6.QtCore import Qt, QSize, QObject, Signal, QFileInfo, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLineEdit, QListWidget,
@@ -17,6 +18,55 @@ try:
     PYNPUT_AVAILABLE = True
 except ImportError:
     PYNPUT_AVAILABLE = False
+
+# Windows 系统级 API 用于强制获取焦点
+if sys.platform == 'win32':
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    # 定义所需的 Windows API 函数
+    SetForegroundWindow = user32.SetForegroundWindow
+    SetForegroundWindow.argtypes = [wintypes.HWND]
+    SetForegroundWindow.restype = wintypes.BOOL
+
+    BringWindowToTop = user32.BringWindowToTop
+    BringWindowToTop.argtypes = [wintypes.HWND]
+    BringWindowToTop.restype = wintypes.BOOL
+
+    GetForegroundWindow = user32.GetForegroundWindow
+    GetForegroundWindow.argtypes = []
+    GetForegroundWindow.restype = wintypes.HWND
+
+    GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+    GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    GetWindowThreadProcessId.restype = wintypes.DWORD
+
+    AttachThreadInput = user32.AttachThreadInput
+    AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    AttachThreadInput.restype = wintypes.BOOL
+
+    AllowSetForegroundWindow = user32.AllowSetForegroundWindow
+    AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+    AllowSetForegroundWindow.restype = wintypes.BOOL
+
+    # ASFW_ANY 常量
+    ASFW_ANY = -1
+
+    # 获取当前进程 ID
+    GetCurrentProcessId = kernel32.GetCurrentProcessId
+    GetCurrentProcessId.argtypes = []
+    GetCurrentProcessId.restype = wintypes.DWORD
+
+    # 用于获取窗口句柄的辅助函数
+    def get_window_handle(widget):
+        """获取 Qt Widget 的 Windows 窗口句柄"""
+        try:
+            return int(widget.winId())
+        except:
+            return None
 
 
 class HotkeySignalHelper(QObject):
@@ -94,6 +144,9 @@ class LauncherDialog(QDialog):
         # 初始刷新：无输入时不显示列表
         self.filter_apps("")
 
+        # 安装事件过滤器以捕获焦点事件
+        self.search_input.installEventFilter(self)
+
     def init_ui(self):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(10, 10, 10, 10)
@@ -116,6 +169,18 @@ class LauncherDialog(QDialog):
         self.layout.addWidget(self.list_widget)
 
         self.list_widget.hide()
+
+    def eventFilter(self, obj, event):
+        """事件过滤器：监控输入框的焦点事件"""
+        if obj == self.search_input and event.type() == event.Type.FocusOut:
+            # 如果输入框失去焦点，延迟重新获取
+            QTimer.singleShot(10, self._ensure_focus)
+        return super().eventFilter(obj, event)
+
+    def _ensure_focus(self):
+        """确保输入框保持焦点"""
+        if self.isVisible():
+            self.search_input.setFocus(Qt.OtherFocusReason)
 
     def filter_apps(self, text):
         """根据输入内容过滤列表：未输入内容时不显示任何列表内容"""
@@ -195,6 +260,11 @@ class LauncherDialog(QDialog):
         if self.plugin:
             self.plugin.dialog = None
         super().closeEvent(event)
+
+    def showEvent(self, event):
+        """窗口显示时自动获取焦点"""
+        super().showEvent(event)
+        QTimer.singleShot(10, self._ensure_focus)
 
 
 class LauncherPlugin(BasePlugin):
@@ -300,6 +370,45 @@ class LauncherPlugin(BasePlugin):
     def _on_hotkey_pressed(self):
         self.signal_helper.trigger_signal.emit()
 
+    def _force_focus_windows(self, hwnd):
+        """Windows 平台强制获取焦点的核心函数"""
+        if sys.platform != 'win32' or not hwnd:
+            return False
+
+        try:
+            # 1. 允许任何进程设置前台窗口
+            AllowSetForegroundWindow(ASFW_ANY)
+
+            # 2. 获取当前前台窗口
+            foreground_hwnd = GetForegroundWindow()
+
+            # 3. 如果目标窗口不是前台窗口，尝试强制切换
+            if foreground_hwnd != hwnd:
+                # 获取当前前台窗口的线程ID
+                foreground_thread = GetWindowThreadProcessId(foreground_hwnd, None)
+                # 获取目标窗口的线程ID
+                target_thread = GetWindowThreadProcessId(hwnd, None)
+
+                # 如果线程不同，需要附加线程输入
+                if foreground_thread != target_thread:
+                    AttachThreadInput(target_thread, foreground_thread, True)
+                    # 设置前台窗口
+                    result = SetForegroundWindow(hwnd)
+                    AttachThreadInput(target_thread, foreground_thread, False)
+                else:
+                    result = SetForegroundWindow(hwnd)
+
+                if result:
+                    # 4. 确保窗口可见并置顶
+                    BringWindowToTop(hwnd)
+                    return True
+
+            return False
+
+        except Exception as e:
+            print(f"[LauncherPlugin] 强制获取焦点失败: {e}")
+            return False
+
     def show_launcher(self):
         """呼出 Spotlight 风格搜索框"""
         setting_key = f"plugin_{self.plugin_id}_enabled"
@@ -307,15 +416,30 @@ class LauncherPlugin(BasePlugin):
         if not self.is_enabled or not is_setting_enabled:
             return
 
+        # 如果对话框已存在，先关闭再重建（确保干净状态）
         if self.dialog is not None:
             try:
                 if self.dialog.isVisible():
+                    # 尝试将现有对话框置前并获取焦点
                     self.dialog.activateWindow()
-                    self.dialog.search_input.setFocus()
+                    self.dialog.raise_()
+
+                    # 使用系统API强制获取焦点
+                    if sys.platform == 'win32':
+                        hwnd = get_window_handle(self.dialog)
+                        if hwnd:
+                            self._force_focus_windows(hwnd)
+
+                    # 延迟设置输入框焦点
+                    QTimer.singleShot(10, self._focus_search_input)
                     return
+                else:
+                    self.dialog.deleteLater()
+                    self.dialog = None
             except RuntimeError:
                 self.dialog = None
 
+        # 创建新对话框
         self.dialog = LauncherDialog(self, parent=self.parent())
 
         # 居中显示在屏幕上方 1/4 的位置
@@ -323,12 +447,44 @@ class LauncherPlugin(BasePlugin):
         x = (screen_geo.width() - self.dialog.width()) // 2
         y = (screen_geo.height()) // 4
         self.dialog.move(x, y)
+
+        # 显示对话框
         self.dialog.show()
 
-        # 唤起后强行置顶并抢占键盘焦点
-        self.dialog.activateWindow()
-        self.dialog.raise_()
-        self.dialog.search_input.setFocus()
+        # 使用系统API强制获取焦点（Windows）
+        if sys.platform == 'win32':
+            hwnd = get_window_handle(self.dialog)
+            if hwnd:
+                self._force_focus_windows(hwnd)
+
+        # 延迟设置输入框焦点
+        QTimer.singleShot(20, self._focus_search_input)
+
+    def _focus_search_input(self):
+        """延迟设置焦点的辅助方法，确保搜索框能正确获取焦点"""
+        if not self.dialog:
+            return
+        try:
+            if not self.dialog.isVisible():
+                return
+
+            # 激活窗口
+            self.dialog.activateWindow()
+            self.dialog.raise_()
+
+            # 设置输入框焦点
+            self.dialog.search_input.setFocus(Qt.OtherFocusReason)
+            self.dialog.search_input.selectAll()
+
+            # 额外尝试：如果输入框没有焦点，使用系统API强制
+            if not self.dialog.search_input.hasFocus() and sys.platform == 'win32':
+                hwnd = get_window_handle(self.dialog.search_input)
+                if hwnd:
+                    # 直接设置输入框控件的焦点
+                    user32.SetFocus(hwnd)
+
+        except RuntimeError:
+            self.dialog = None
 
     def create_settings_widget(self, parent=None) -> QWidget:
         group = QGroupBox("🚀 快捷应用启动器", parent)
