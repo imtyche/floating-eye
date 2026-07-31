@@ -72,7 +72,7 @@ class HealthyBubbleDialog(QWidget):
         self.close_timer = QTimer(self)
         self.close_timer.setSingleShot(True)
         self.close_timer.timeout.connect(self.close)
-        self.close_timer.start(5000)
+        self.close_timer.start(10000)
 
     def mousePressEvent(self, event):
         """点击气泡任意位置立即关闭"""
