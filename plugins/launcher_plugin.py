@@ -1,5 +1,7 @@
 import os
 import threading
+import urllib.parse
+import webbrowser
 from PySide6.QtCore import Qt, QSize, QObject, Signal, QFileInfo
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -69,7 +71,7 @@ class LauncherDialog(QDialog):
                 font-size: 14px;
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
             }
-            /* 选中与悬停颜色修改：柔和半透明浅绿背景 + 舒适高亮文本 */
+            /* 选中与悬停颜色：柔和半透明浅绿背景 + 舒适高亮文本 */
             QListWidget::item:selected, QListWidget::item:hover {
                 background-color: rgba(76, 175, 80, 0.35);
                 color: #e8f5e9;
@@ -99,7 +101,7 @@ class LauncherDialog(QDialog):
 
         # 搜索输入框
         self.search_input = QLineEdit(self)
-        self.search_input.setPlaceholderText("🔍 Spotlight 搜索...")
+        self.search_input.setPlaceholderText("🔍 Spotlight 搜索应用或按回车搜索网页...")
         self.search_input.textChanged.connect(self.filter_apps)
         self.search_input.returnPressed.connect(self.launch_selected_app)
         self.layout.addWidget(self.search_input)
@@ -145,17 +147,32 @@ class LauncherDialog(QDialog):
         self.adjustSize()
 
     def launch_selected_app(self):
-        """启动选中的应用程序"""
+        """启动选中的应用程序；若无选中应用，则使用系统默认浏览器搜索"""
         current_item = self.list_widget.currentItem()
-        if not current_item:
-            return
 
-        app_path = current_item.data(Qt.UserRole)
-        if app_path and os.path.exists(app_path):
+        # 1. 如果有匹配选中的本地应用，直接启动
+        if current_item and self.list_widget.isVisible():
+            app_path = current_item.data(Qt.UserRole)
+            if app_path and os.path.exists(app_path):
+                try:
+                    os.startfile(app_path)
+                    self.close()
+                    return
+                except Exception as e:
+                    print(f"启动本地应用失败: {e}")
+
+        # 2. 没有匹配应用或未选中时：调用默认浏览器跳转网页搜索
+        query_text = self.search_input.text().strip()
+        if query_text:
+            # 此处以 Bing 为例，也可以换成 https://www.google.com/search?q=
+            encoded_query = urllib.parse.quote(query_text)
+            search_url = f"https://www.bing.com/search?q={encoded_query}"
+
             try:
-                os.startfile(app_path)
+                webbrowser.open(search_url)
             except Exception as e:
-                print(f"启动失败: {e}")
+                print(f"调起默认浏览器失败: {e}")
+
         self.close()
 
     def keyPressEvent(self, event):
