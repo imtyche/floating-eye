@@ -117,8 +117,8 @@ class FloatingEye(QWidget):
         self.auto_start = self.settings_manager.get_setting('auto_start', 'false') == 'true'
         self.current_theme = self.settings_manager.get_setting('theme', 'blood')
         self.eye_color_mode = self.settings_manager.get_setting('eye_color', 'default')
-        retention_days = self.settings_manager.get_setting('retention_days', '0')
-        self.db.clean_expired_logs(retention_days)
+        self.retention_days = self.settings_manager.get_setting('retention_days', '0')
+        self.db.clean_expired_logs(self.retention_days)
 
     def apply_settings(self):
         """应用设置（从设置对话框调用）"""
@@ -164,7 +164,7 @@ class FloatingEye(QWidget):
 
     def on_activity_changed(self, title, screenshot_base64):
         """处理活动窗口变化"""
-        self.db.add_log(title, screenshot_base64)
+        self.db.add_log(title, screenshot_base64, retention_days=self.retention_days)
 
     def create_eye_shape(self, cx, cy, w, h):
         """创建眼睛形状路径"""

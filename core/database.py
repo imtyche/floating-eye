@@ -39,8 +39,12 @@ class DatabaseManager:
         conn.commit()
         conn.close()
 
-    def add_log(self, activity, screenshot=None):
+    def add_log(self, activity, screenshot=None, retention_days=None):
         """添加活动日志"""
+        # 如果保留天数为 -1，表示永不保存，直接跳过插入
+        if str(retention_days) == "-1":
+            return
+
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

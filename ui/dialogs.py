@@ -292,6 +292,7 @@ class SettingsDialog(QDialog):
         self.retention_combo.addItem("60 天", "60")
         self.retention_combo.addItem("90 天", "90")
         self.retention_combo.addItem("180 天", "180")
+        self.retention_combo.addItem("永不保存", "-1")
         self.retention_combo.setToolTip("自动清理超过指定天数的截图与历史日志")
         retention_widget_layout.addWidget(self.retention_combo)
         retention_widget_layout.addStretch()
@@ -429,6 +430,10 @@ class SettingsDialog(QDialog):
         self.settings_manager.set_setting('capture_interval', str(self.interval_spin.value()))
         self.settings_manager.set_setting('auto_start', 'true' if self.auto_start_check.isChecked() else 'false')
 
+        # 保存数据保留天数（包括永不保存 -1）
+        retention_days = self.retention_combo.currentData()
+        self.settings_manager.set_setting('retention_days', str(retention_days))
+
         # 保存界面主题
         theme_key = self.theme_combo.currentData()
         self.settings_manager.set_setting('theme', theme_key)
@@ -449,9 +454,6 @@ class SettingsDialog(QDialog):
 
         QMessageBox.information(self, "✅ 设置已保存", "设置已成功保存并应用！")
         self.accept()
-        # 在保存所有设置时加上 retention_days：
-        retention_days = self.retention_combo.currentData()
-        self.settings_manager.set_setting('retention_days', str(retention_days))
 
     def get_theme(self):
         """获取当前主题"""
