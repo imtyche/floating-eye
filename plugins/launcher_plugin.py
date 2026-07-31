@@ -12,6 +12,13 @@ from PySide6.QtWidgets import (
 )
 from plugins.base import BasePlugin
 
+# 引入 pypinyin 用于汉字转拼音匹配
+try:
+    from pypinyin import lazy_pinyin, Style
+    PYPINYIN_AVAILABLE = True
+except ImportError:
+    PYPINYIN_AVAILABLE = False
+
 # 引入 pynput 用于全局快捷键监听
 try:
     from pynput import keyboard
@@ -183,7 +190,7 @@ class LauncherDialog(QDialog):
             self.search_input.setFocus(Qt.OtherFocusReason)
 
     def filter_apps(self, text):
-        """根据输入内容过滤列表：未输入内容时不显示任何列表内容"""
+        """根据输入内容过滤列表：支持原名、拼音全拼、首字母搜索"""
         query = text.strip().lower()
         self.list_widget.clear()
 
@@ -193,9 +200,14 @@ class LauncherDialog(QDialog):
             return
 
         count = 0
-        # 从插件的预缓存列表中快速检索
-        for name, path, icon in self.plugin.cached_apps:
-            if query in name.lower():
+        # cached_apps 格式为: (name, full_path, icon, py_full, py_first)
+        for app in self.plugin.cached_apps:
+            name, path, icon = app[0], app[1], app[2]
+            py_full = app[3] if len(app) > 3 else ""
+            py_first = app[4] if len(app) > 4 else ""
+
+            # 匹配逻辑：命中原名 OR 命中全拼 OR 命中拼音首字母
+            if (query in name.lower()) or (py_full and query in py_full) or (py_first and query in py_first):
                 item = QListWidgetItem(icon, name) if icon else QListWidgetItem(name)
                 item.setData(Qt.UserRole, path)
                 self.list_widget.addItem(item)
@@ -229,7 +241,6 @@ class LauncherDialog(QDialog):
         # 2. 没有匹配应用或未选中时：调用默认浏览器跳转网页搜索
         query_text = self.search_input.text().strip()
         if query_text:
-            # 此处以 Bing 为例，也可以换成 https://www.google.com/search?q=
             encoded_query = urllib.parse.quote(query_text)
             search_url = f"https://www.bing.com/search?q={encoded_query}"
 
@@ -274,7 +285,7 @@ class LauncherPlugin(BasePlugin):
         super().__init__(settings_manager, parent)
         self.dialog = None
         self.hotkey_listener = None
-        self.cached_apps = []  # 缓存: [(app_name, full_path, QIcon), ...]
+        self.cached_apps = []  # 缓存: [(app_name, full_path, QIcon, py_full, py_first), ...]
 
         self.signal_helper = HotkeySignalHelper()
         self.signal_helper.trigger_signal.connect(self.show_launcher)
@@ -309,7 +320,7 @@ class LauncherPlugin(BasePlugin):
         self._stop_hotkey_listener()
 
     def _preload_apps(self):
-        """后台预加载应用列表并提取系统图标"""
+        """后台预加载应用列表并提取系统图标及拼音索引"""
         paths = [
             os.path.join(os.environ.get("PROGRAMDATA", ""), r"Microsoft\Windows\Start Menu\Programs"),
             os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs")
@@ -332,11 +343,20 @@ class LauncherPlugin(BasePlugin):
                         full_path = os.path.join(root, file)
 
                         try:
-                            # 严格传入 QFileInfo 避免 PySide6 参数错误
                             icon = icon_provider.icon(QFileInfo(full_path))
                         except Exception:
                             icon = QIcon()
-                        apps_data.append((name, full_path, icon))
+
+                        # 生成拼音全拼与首字母
+                        py_full = ""
+                        py_first = ""
+                        if PYPINYIN_AVAILABLE:
+                            # 拼接全拼，例如 ["wei", "xin"] -> "weixin"
+                            py_full = "".join(lazy_pinyin(name)).lower()
+                            # 拼接首字母，例如 "微信" -> "wx"
+                            py_first = "".join(lazy_pinyin(name, style=Style.FIRST_LETTER)).lower()
+
+                        apps_data.append((name, full_path, icon, py_full, py_first))
 
         self.cached_apps = apps_data
 
@@ -345,7 +365,6 @@ class LauncherPlugin(BasePlugin):
             print("[LauncherPlugin] 警告: 未安装 pynput，无法开启全局快捷键监听 (pip install pynput)")
             return
 
-        # 启动前先清空已有监听器，防止重复注册
         self._stop_hotkey_listener()
 
         hotkey_mapping = {
@@ -376,30 +395,21 @@ class LauncherPlugin(BasePlugin):
             return False
 
         try:
-            # 1. 允许任何进程设置前台窗口
             AllowSetForegroundWindow(ASFW_ANY)
-
-            # 2. 获取当前前台窗口
             foreground_hwnd = GetForegroundWindow()
 
-            # 3. 如果目标窗口不是前台窗口，尝试强制切换
             if foreground_hwnd != hwnd:
-                # 获取当前前台窗口的线程ID
                 foreground_thread = GetWindowThreadProcessId(foreground_hwnd, None)
-                # 获取目标窗口的线程ID
                 target_thread = GetWindowThreadProcessId(hwnd, None)
 
-                # 如果线程不同，需要附加线程输入
                 if foreground_thread != target_thread:
                     AttachThreadInput(target_thread, foreground_thread, True)
-                    # 设置前台窗口
                     result = SetForegroundWindow(hwnd)
                     AttachThreadInput(target_thread, foreground_thread, False)
                 else:
                     result = SetForegroundWindow(hwnd)
 
                 if result:
-                    # 4. 确保窗口可见并置顶
                     BringWindowToTop(hwnd)
                     return True
 
@@ -416,21 +426,17 @@ class LauncherPlugin(BasePlugin):
         if not self.is_enabled or not is_setting_enabled:
             return
 
-        # 如果对话框已存在，先关闭再重建（确保干净状态）
         if self.dialog is not None:
             try:
                 if self.dialog.isVisible():
-                    # 尝试将现有对话框置前并获取焦点
                     self.dialog.activateWindow()
                     self.dialog.raise_()
 
-                    # 使用系统API强制获取焦点
                     if sys.platform == 'win32':
                         hwnd = get_window_handle(self.dialog)
                         if hwnd:
                             self._force_focus_windows(hwnd)
 
-                    # 延迟设置输入框焦点
                     QTimer.singleShot(10, self._focus_search_input)
                     return
                 else:
@@ -439,25 +445,20 @@ class LauncherPlugin(BasePlugin):
             except RuntimeError:
                 self.dialog = None
 
-        # 创建新对话框
         self.dialog = LauncherDialog(self, parent=self.parent())
 
-        # 居中显示在屏幕上方 1/4 的位置
         screen_geo = self.dialog.screen().geometry()
         x = (screen_geo.width() - self.dialog.width()) // 2
         y = (screen_geo.height()) // 4
         self.dialog.move(x, y)
 
-        # 显示对话框
         self.dialog.show()
 
-        # 使用系统API强制获取焦点（Windows）
         if sys.platform == 'win32':
             hwnd = get_window_handle(self.dialog)
             if hwnd:
                 self._force_focus_windows(hwnd)
 
-        # 延迟设置输入框焦点
         QTimer.singleShot(20, self._focus_search_input)
 
     def _focus_search_input(self):
@@ -468,19 +469,15 @@ class LauncherPlugin(BasePlugin):
             if not self.dialog.isVisible():
                 return
 
-            # 激活窗口
             self.dialog.activateWindow()
             self.dialog.raise_()
 
-            # 设置输入框焦点
             self.dialog.search_input.setFocus(Qt.OtherFocusReason)
             self.dialog.search_input.selectAll()
 
-            # 额外尝试：如果输入框没有焦点，使用系统API强制
             if not self.dialog.search_input.hasFocus() and sys.platform == 'win32':
                 hwnd = get_window_handle(self.dialog.search_input)
                 if hwnd:
-                    # 直接设置输入框控件的焦点
                     user32.SetFocus(hwnd)
 
         except RuntimeError:
@@ -494,7 +491,6 @@ class LauncherPlugin(BasePlugin):
 
         chk_enable = QCheckBox("启用 CTRL+ALT 快捷唤起搜索框", group)
 
-        # 统一 key 规则：plugin_{plugin_id}_enabled，默认值为 "false"
         setting_key = f"plugin_{self.plugin_id}_enabled"
         is_enabled = self.settings_manager.get_setting(setting_key, "false") == "true"
         chk_enable.setChecked(is_enabled)
