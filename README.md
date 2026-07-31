@@ -10,8 +10,8 @@
 ```
 floating-eye/
 ├── README.md                  # 项目说明
-├── requirements.txt           # 运行时依赖（用于 pip install -r requirements.txt）
-├── setup.py                   # 打包 / 安装脚本（可通过 python setup.py install 或 pip install .）
+├── requirements.txt           # 运行时依赖
+├── setup.py                   # 打包 / 安装脚本
 ├── package.bat                # Windows 打包/发布辅助脚本
 ├── config/                    # 配置与主题定义
 │   ├── __init__.py
@@ -36,8 +36,9 @@ floating-eye/
 │   ├── base.py                # 插件基类
 │   ├── manager.py             # 插件管理类
 │   ├── healthy_plugin.py      # 健康提醒功能
+│   ├── launcher_plugin.py     # 全局搜索功能
 │   └── todo_plugin.py         # 待办插件功能
-└── main.py                    # 程序入口（创建 QApplication 并显示 FloatingEye）
+└── main.py                    # 程序入口
 ```
 
 ## 怎么安装:

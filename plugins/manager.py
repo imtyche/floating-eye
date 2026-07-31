@@ -3,6 +3,7 @@ from plugins.base import BasePlugin
 # 显式导入插件模块，确保打包后能稳定加载
 import plugins.todo_plugin as todo_plugin
 import plugins.healthy_plugin as healthy_plugin
+import plugins.launcher_plugin as launcher_plugin
 
 
 class PluginManager:
@@ -26,6 +27,7 @@ class PluginManager:
         plugin_modules = [
             healthy_plugin,
             todo_plugin,
+            launcher_plugin,
         ]
 
         for module in plugin_modules:
@@ -40,8 +42,9 @@ class PluginManager:
                 print(f"⚠️ 加载插件模块 '{module}' 失败: {e}")
 
     def load_all_plugins(self):
-        """🌟 根据持久化配置初始化已启用的插件（之前丢失的方法）"""
+        """🌟 根据持久化配置初始化已启用的插件"""
         for plugin_id, plugin in self.plugins.items():
+            # 获取配置，如果配置项不存在（说明是新插件），默认返回 "false"
             enabled = self.settings_manager.get_setting(f"plugin_{plugin_id}_enabled", "false") == "true"
             if enabled:
                 plugin.enable()
