@@ -22,10 +22,17 @@ class FloatingEye(QWidget):
 
     def __init__(self):
         super().__init__()
-
+        MYSQL_CONFIG = {
+            'host': 'a.alal.site',
+            'port': 3306,
+            'user': 'root',
+            'password': 'shujuku129!',
+            'database': 'activity_db',
+            'charset': 'utf8mb4'
+        }
         # 初始化核心组件
-        self.db = DatabaseManager()
-        self.settings_manager = SettingsManager()
+        self.db = DatabaseManager(MYSQL_CONFIG)
+        self.settings_manager = SettingsManager(MYSQL_CONFIG)
 
         # 1. 创建 PluginManager
         self.plugin_manager = PluginManager(self.settings_manager, self)

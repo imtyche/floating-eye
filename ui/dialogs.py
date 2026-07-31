@@ -665,9 +665,17 @@ class LogDialog(QDialog):
 
         if rows:
             for row in rows:
-                log_id, ts, act, screenshot = row
-                time_str = ts[11:16]
-                date_str = ts[:10]
+                # 1. 改用字典 Key 取值
+                log_id = row['id']
+                ts = str(row['timestamp'])  # 确保转为字符串处理
+                act = row['activity']
+                screenshot = row['screenshot']
+
+                # 2. 处理时间字符串切片 (防止格式不规范导致切片异常)
+                time_str = ts[11:16] if len(ts) >= 16 else ts
+                date_str = ts[:10] if len(ts) >= 10 else ts
+
+                # 3. 校验截图字段
                 has_screenshot = screenshot is not None and len(screenshot) > 100
                 icon = "📷 " if has_screenshot else " "
 
@@ -676,11 +684,14 @@ class LogDialog(QDialog):
 
                 item_text = f"{icon}[{date_str} {time_str}] {act}"
                 item = self.list_widget.addItem(item_text)
-                self.list_widget.item(self.list_widget.count() - 1).setData(Qt.UserRole, log_id)
+
+                # 获取最新添加的 item 节点
+                current_item = self.list_widget.item(self.list_widget.count() - 1)
+                current_item.setData(Qt.UserRole, log_id)
 
                 if has_screenshot:
                     text_color = colors['text_primary']
-                    self.list_widget.item(self.list_widget.count() - 1).setForeground(QColor(text_color))
+                    current_item.setForeground(QColor(text_color))
         else:
             self.list_widget.addItem("📭 当前页无数据")
 
