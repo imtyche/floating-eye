@@ -1,6 +1,6 @@
 import sqlite3
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 
@@ -59,7 +59,7 @@ class DatabaseManager:
         cursor = conn.cursor()
 
         # 替换为带时区/本地时区的当前时间
-        now = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
         cursor.execute(
             "INSERT INTO logs (timestamp, activity, screenshot) VALUES (?, ?, ?)",
@@ -125,7 +125,8 @@ class DatabaseManager:
                 'screenshot': row[3]
             }
         return None
-    # 清理过期数据
+    from datetime import datetime, timedelta
+
     def clean_expired_logs(self, retention_days):
         """根据数据保留天数自动删除过期数据"""
         try:
@@ -133,19 +134,23 @@ class DatabaseManager:
             if days <= 0:
                 return  # 0 或负数表示不清理 (永久保存)
 
+            # 1. 在 Python 端算好 N 天前的本地绝对时间字符串
+            cutoff_date = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
 
-            # 删除 timestamp 小于 N 天前的日志数据
+            # 2. 直接比较字符串（标准 ISO 格式的时间字符串可以直接比大小）
             cursor.execute(
-                "DELETE FROM logs WHERE datetime(timestamp) < datetime('now', '-' || ? || ' days', 'localtime')",
-                (days,)
+                "DELETE FROM logs WHERE timestamp < ?",
+                (cutoff_date,)
             )
             cleaned_count = cursor.rowcount
             conn.commit()
             conn.close()
+
             if cleaned_count > 0:
-                print(f"🧹 已自动清理 {cleaned_count} 条超过 {days} 天的历史日志")
+                print(f"🧹 已自动清理 {cleaned_count} 条在 {cutoff_date} 之前的历史日志")
         except Exception as e:
             print(f"⚠️ 清理过期数据时出错: {e}")
 
@@ -155,7 +160,7 @@ class DatabaseManager:
         try:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
             # 格式化堆栈信息为字符串
             if isinstance(exc_tb, str):
