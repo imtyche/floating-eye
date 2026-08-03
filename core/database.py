@@ -1,4 +1,5 @@
 import sqlite3
+import traceback
 from datetime import datetime
 
 
@@ -14,15 +15,25 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
 
-        # 创建日志表
+        # 创建活动日志表
         cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS logs (
-                                                           id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                                           timestamp TEXT,
-                                                           activity TEXT,
-                                                           screenshot BLOB
-                       )
-                       ''')
+           CREATE TABLE IF NOT EXISTS logs (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               timestamp TEXT,
+               activity TEXT,
+               screenshot BLOB
+           )
+           ''')
+        # 创建系统日志表
+        cursor.execute('''
+           CREATE TABLE IF NOT EXISTS crash_logs (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             timestamp TEXT,
+             exc_type TEXT,
+             exc_value TEXT,
+             stack_trace TEXT
+           )
+           ''')
 
         # 索引1：按日期查询优化
         cursor.execute('''
@@ -135,3 +146,29 @@ class DatabaseManager:
                 print(f"🧹 已自动清理 {cleaned_count} 条超过 {days} 天的历史日志")
         except Exception as e:
             print(f"⚠️ 清理过期数据时出错: {e}")
+
+    # 新增保存闪退日志方法
+    def add_crash_log(self, exc_type, exc_value, exc_tb):
+        """记录崩溃/闪退日志"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 格式化堆栈信息为字符串
+            if isinstance(exc_tb, str):
+                stack_trace = exc_tb
+            else:
+                stack_trace = "".join(traceback.format_tb(exc_tb))
+
+            type_str = str(exc_type.__name__) if hasattr(exc_type, '__name__') else str(exc_type)
+            value_str = str(exc_value)
+
+            cursor.execute(
+                "INSERT INTO crash_logs (timestamp, exc_type, exc_value, stack_trace) VALUES (?, ?, ?, ?)",
+                (now, type_str, value_str, stack_trace)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"写入崩溃日志到数据库失败: {e}")

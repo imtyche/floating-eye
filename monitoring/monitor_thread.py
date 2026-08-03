@@ -1,6 +1,7 @@
 import ctypes
 from PySide6.QtCore import QThread, Signal
 from capture.screenshot import ScreenshotManager, QT_MULTIMEDIA_AVAILABLE
+from core.database import DatabaseManager
 
 
 class MonitorThread(QThread):
@@ -10,6 +11,7 @@ class MonitorThread(QThread):
 
     def __init__(self, settings_manager=None):
         super().__init__()
+        self.db_manager = DatabaseManager()
         self.switch_count = 0
         self.last_title = ""
         self.running = True
@@ -45,46 +47,53 @@ class MonitorThread(QThread):
         """线程主循环"""
         user32 = ctypes.windll.user32
 
-        while self.running:
-            self.sleep(3)
+        # 整个线程主逻辑包裹 try-except，捕获致命异常
+        try:
+            while self.running:
+                self.sleep(3)
 
-            try:
-                hwnd = user32.GetForegroundWindow()
-                if hwnd:
-                    length = user32.GetWindowTextLengthW(hwnd)
-                    if length > 0:
-                        buff = ctypes.create_unicode_buffer(length + 1)
-                        user32.GetWindowTextW(hwnd, buff, length + 1)
-                        title = buff.value
+                try:
+                    hwnd = user32.GetForegroundWindow()
+                    if hwnd:
+                        length = user32.GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buff = ctypes.create_unicode_buffer(length + 1)
+                            user32.GetWindowTextW(hwnd, buff, length + 1)
+                            title = buff.value
 
-                        if title and title != "Unknown" and title != "":
-                            if title != self.last_title:
-                                self.last_title = title
-                                self.total_switches += 1
-                                print(f"🔄 窗口切换: {title} (第 {self.total_switches} 次切换)")
+                            if title and title != "Unknown" and title != "":
+                                if title != self.last_title:
+                                    self.last_title = title
+                                    self.total_switches += 1
+                                    print(f"🔄 窗口切换: {title} (第 {self.total_switches} 次切换)")
 
-                                screenshot_base64 = None
+                                    screenshot_base64 = None
 
-                                # 按间隔触发媒体捕获
-                                if self.total_switches % self.capture_interval == 0:
-                                    print(f"📷 触发媒体捕获 (第 {self.total_switches} 次切换)")
-                                    screenshot_base64 = ScreenshotManager.capture_media(
-                                        use_camera=self.use_camera,
-                                        use_screenshot=self.use_screenshot
-                                    )
+                                    # 按间隔触发媒体捕获
+                                    if self.total_switches % self.capture_interval == 0:
+                                        print(f"📷 触发媒体捕获 (第 {self.total_switches} 次切换)")
+                                        screenshot_base64 = ScreenshotManager.capture_media(
+                                            use_camera=self.use_camera,
+                                            use_screenshot=self.use_screenshot
+                                        )
 
-                                    # 检查捕获结果
-                                    if screenshot_base64 is not None and len(screenshot_base64) > 100:
-                                        print(f"✅ 媒体捕获成功，Base64长度: {len(screenshot_base64)} (第 {self.total_switches} 次切换)")
-                                    else:
-                                        print(f"⚠️ 媒体捕获失败，结果为空 (第 {self.total_switches} 次切换)")
+                                        # 检查捕获结果
+                                        if screenshot_base64 is not None and len(screenshot_base64) > 100:
+                                            print(f"✅ 媒体捕获成功，Base64长度: {len(screenshot_base64)} (第 {self.total_switches} 次切换)")
+                                        else:
+                                            print(f"⚠️ 媒体捕获失败，结果为空 (第 {self.total_switches} 次切换)")
 
-                                    self.total_switches = 0
+                                        self.total_switches = 0
 
-                                # 发送信号（即使截图失败也发送，只是内容为 None）
-                                self.activity_changed.emit(title, screenshot_base64)
-            except Exception as e:
-                print(f"监控线程错误: {e}")
+                                    # 发送信号（即使截图失败也发送，只是内容为 None）
+                                    self.activity_changed.emit(title, screenshot_base64)
+                except Exception as e:
+                    # 普通可恢复异常，打印输出继续循环
+                    print(f"监控线程非致命错误: {e}")
+        except Exception as fatal_e:
+            # 严重未捕获异常导致线程终止时，写入 crash_logs 数据库
+            self.db_manager.add_crash_log(type(fatal_e), fatal_e, fatal_e.__traceback__)
+            print(f"💥 监控线程严重崩溃已记录: {fatal_e}")
 
     def stop(self):
         """停止线程"""

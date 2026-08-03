@@ -4,6 +4,9 @@ import logging
 from PySide6.QtWidgets import QApplication
 
 from ui.eye_widget import FloatingEye
+from core.database import DatabaseManager
+
+db_manager = DatabaseManager()
 
 
 def _setup_logging():
@@ -21,11 +24,17 @@ def _setup_logging():
 
 
 def _excepthook(exc_type, exc_value, exc_tb):
-    # Ensure uncaught exceptions are recorded to the log for later diagnosis
+    # 1. 记录崩溃日志到数据库 (新增)
+    try:
+        db_manager.add_crash_log(exc_type, exc_value, exc_tb)
+    except Exception as e:
+        print(f"写入闪退日志失败: {e}")
+
+    # 2. 保留原有的本地文件日志
     logging.exception("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
-    # Call the default excepthook (prints to stderr)
+
+    # 3. 调用默认的 excepthook 并在终端打印
     sys.__excepthook__(exc_type, exc_value, exc_tb)
-    # Exit with a non-zero status to indicate failure
     sys.exit(1)
 
 
@@ -40,8 +49,9 @@ def main():
         eye.show()
         sys.exit(app.exec())
     except Exception as e:
+        # 启动过程中如果抛出异常，也保存日志
+        db_manager.add_crash_log(type(e), e, e.__traceback__)
         logging.exception("启动错误: %s", e)
-        # make sure we exit with non-zero code on fatal startup error
         sys.exit(1)
 
 
