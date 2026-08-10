@@ -15,15 +15,22 @@ SINGLE_INSTANCE_SERVER_NAME = "FloatingEye_Unique_Single_Instance_Lock"
 
 def _setup_logging():
     try:
-        log_path = os.path.join(os.path.expanduser("~"), "floating-eye.log")
+        # 如果是打包后的环境，取 exe 所在目录；否则取当前 py 文件所在目录
+        if getattr(sys, 'frozen', False):
+            current_dir = os.path.dirname(sys.executable)
+        else:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+
+        log_path = os.path.join(current_dir, "floating-eye.log")
+
         logging.basicConfig(
             filename=log_path,
             level=logging.INFO,
-            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            encoding='utf-8'
         )
         logging.info("FloatingEye starting up")
     except Exception:
-        # If logging setup fails, fall back to console logging
         logging.basicConfig(level=logging.INFO)
 
 
