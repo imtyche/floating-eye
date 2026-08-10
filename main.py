@@ -1,12 +1,16 @@
 import sys
 import os
 import logging
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from ui.eye_widget import FloatingEye
 from core.database import DatabaseManager
 
 db_manager = DatabaseManager()
+
+# 定义一个唯一的本地服务名称（尽量唯一）
+SINGLE_INSTANCE_SERVER_NAME = "FloatingEye_Unique_Single_Instance_Lock"
 
 
 def _setup_logging():
@@ -24,7 +28,7 @@ def _setup_logging():
 
 
 def _excepthook(exc_type, exc_value, exc_tb):
-    # 1. 记录崩溃日志到数据库 (新增)
+    # 1. 记录崩溃日志到数据库
     try:
         db_manager.add_crash_log(exc_type, exc_value, exc_tb)
     except Exception as e:
@@ -38,13 +42,44 @@ def _excepthook(exc_type, exc_value, exc_tb):
     sys.exit(1)
 
 
+def is_already_running(server_name: str) -> bool:
+    """检查是否有已有实例在运行"""
+    socket = QLocalSocket()
+    socket.connectToServer(server_name)
+    # 尝试连接，等待 500ms
+    if socket.waitForConnected(500):
+        socket.disconnectFromServer()
+        return True
+    return False
+
+
 def main():
     """应用程序入口"""
     _setup_logging()
     sys.excepthook = _excepthook
 
+    # 初始化 QApplication（弹出 QMessageBox 依赖 QApplication 的初始化）
+    app = QApplication(sys.argv)
+
+    # ------------------ 单例检测逻辑 ------------------
+    if is_already_running(SINGLE_INSTANCE_SERVER_NAME):
+        QMessageBox.warning(
+            None,
+            "程序重复启动",
+            "FloatingEye 已经在运行中，请勿重复启动！",
+            QMessageBox.StandardButton.Ok
+        )
+        sys.exit(0)
+
+    # 创建本地 Server，保证后续再次启动时能被捕捉到
+    local_server = QLocalServer()
+    # 防范上一次非正常退出残留的服务文件
+    QLocalServer.removeServer(SINGLE_INSTANCE_SERVER_NAME)
+    if not local_server.listen(SINGLE_INSTANCE_SERVER_NAME):
+        logging.error("无法启动单例服务监听: %s", local_server.errorString())
+    # --------------------------------------------------
+
     try:
-        app = QApplication(sys.argv)
         eye = FloatingEye()
         eye.show()
         sys.exit(app.exec())
