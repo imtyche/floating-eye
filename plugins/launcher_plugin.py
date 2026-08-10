@@ -446,9 +446,10 @@ class LauncherPlugin(BasePlugin):
             print("[LauncherPlugin] 警告: 未安装 pynput，无法开启全局快捷键监听 (pip install pynput)")
             return
         self._stop_hotkey_listener()
+
+        # 将快捷键映射更新为 Ctrl + Space
         hotkey_mapping = {
-            '<ctrl>+<alt>+<space>': self._on_hotkey_pressed,
-            '<ctrl>+<alt>': self._on_hotkey_pressed
+            '<ctrl>+<space>': self._on_hotkey_pressed
         }
         try:
             self.hotkey_listener = keyboard.GlobalHotKeys(hotkey_mapping)
@@ -544,7 +545,8 @@ class LauncherPlugin(BasePlugin):
         layout.setSpacing(8)
         layout.setContentsMargins(15, 20, 15, 15)
 
-        chk_enable = QCheckBox("启用 CTRL+ALT 快捷唤起搜索框", group)
+        # 更新 UI 设置界面上的文字描述
+        chk_enable = QCheckBox("启用 CTRL+SPACE 快捷唤起搜索框", group)
         setting_key = f"plugin_{self.plugin_id}_enabled"
         is_enabled = self.settings_manager.get_setting(setting_key, "false") == "true"
         chk_enable.setChecked(is_enabled)
