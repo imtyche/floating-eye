@@ -48,6 +48,7 @@ class FloatingEye(QWidget):
             Qt.Tool |
             Qt.WindowDoesNotAcceptFocus
         )
+
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         # 稍微增大窗口高度以容纳下方的推进器火焰
@@ -108,6 +109,29 @@ class FloatingEye(QWidget):
 
         # 应用开机启动设置
         self.apply_auto_start()
+        self.ensure_absolute_topmost()
+
+    def ensure_absolute_topmost(self):
+        """借助 Windows 原生 API 强制将窗口设为绝对顶层 (HWND_TOPMOST)"""
+        try:
+            import sys
+            if sys.platform == "win32":
+                import ctypes
+                HWND_TOPMOST = -1
+                SWP_NOMOVE = 0x0002
+                SWP_NOSIZE = 0x0001
+                SWP_NOACTIVATE = 0x0010
+
+                # 取得窗口 Win32 句柄并设置置顶状态
+                hwnd = int(self.winId())
+                ctypes.windll.user32.SetWindowPos(
+                    hwnd,
+                    HWND_TOPMOST,
+                    0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+                )
+        except Exception as e:
+            print(f"⚠️ 设置 absolute topmost 失败: {e}")
 
     def load_settings(self):
         """加载设置"""
@@ -178,6 +202,13 @@ class FloatingEye(QWidget):
         return path
 
     def update_animation(self):
+        # ===== 新增：定期强制刷新置顶状态（例如每 60 帧刷新一次） =====
+        if not hasattr(self, '_topmost_counter'):
+            self._topmost_counter = 0
+        self._topmost_counter += 1
+        if self._topmost_counter >= 60:
+            self._topmost_counter = 0
+            self.ensure_absolute_topmost()
         """更新动画状态"""
         global_cursor = self.cursor().pos()
         local_cursor = self.mapFromGlobal(global_cursor)
